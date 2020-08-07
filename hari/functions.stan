@@ -39,8 +39,8 @@ real partial_log_like(int[] counts_slice, int start, int end, vector time, vecto
 
   for (n in 1:N) {
     lp += log_mix(p[n],
-		  poisson_log_propto_lpmf(counts_slice[n] | log_exposure_slice[n] + log_sum_exp(log_src_rate[n], log_bkg_rate[n])),
-		  log_exposure_slice[n] + log_bkg_rate[n]		  
+		  poisson_log_lpmf(counts_slice[n] | log_exposure_slice[n] + log_sum_exp(log_src_rate[n], log_bkg_rate[n])),
+		  poisson_log_lpmf(counts_slice[n] |log_exposure_slice[n] + log_bkg_rate[n] )
 		  );
   }
   
