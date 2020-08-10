@@ -13,7 +13,7 @@ data {
 
   int<lower=1> K_src; // number of FFs
   int<lower=1> K_bkg; // number of FFs
-  int<lower=1> K_onoff; //
+  int<lower=1> K_p; //
 
   int grainsize;
 }
@@ -23,16 +23,16 @@ transformed data {
 
   vector[N] log_exposure = log(exposure);
 
-  real max_range = min(time) - max(time);
+  real max_range = max(time) - min(time);
   
 
 }
 parameters {
 
 
-  row_vector[K_src] omega_src_var; // this weird MC integration thing. I suppose I could do this in stan
-  row_vector[K_bkg] omega_bkg_var; // this weird MC integration thing. I suppose I could do this in stan
-  row_vector[K_p] omega_p_var; //
+  row_vector[K_src] omega_src_var[2]; // this weird MC integration thing. I suppose I could do this in stan
+  row_vector[K_bkg] omega_bkg_var[2]; // this weird MC integration thing. I suppose I could do this in stan
+  row_vector[K_p] omega_p_var[2]; //
 
   
   vector[K_src] beta1_src; // the amplitude along the cos basis
@@ -44,18 +44,21 @@ parameters {
 
 
 
-  real log_scale_src;
-  real log_scale_bkg;
-  real log_scale_p;
+  vector[2] log_scale_src;
+  vector[2] log_scale_bkg;
+  vector[2] log_scale_p;
 
-  real<lower=0, upper=1> range1_src_raw;
-  real<lower=0, upper=1> range2_src_raw;
 
-  real<lower=0, upper=1> range1_bkg_raw;
-  real<lower=0, upper=1> range2_bkg_raw;
 
-  real<lower=0, upper=1> range1_p_raw;
-  real<lower=0, upper=1> range2_p_raw;
+  
+  real<lower=.5, upper=1> range1_bkg_raw;
+  real<lower=.5, upper=range1_bkg_raw> range2_bkg_raw;
+
+  real<lower=0, upper=.5> range1_src_raw;
+  real<lower=0, upper=range1_src_raw> range2_src_raw;
+  
+  real<lower=0, upper=.8> range1_p_raw;
+  real<lower=0, upper=range1_p_raw> range2_p_raw;
 
 }
 
@@ -70,13 +73,13 @@ transformed parameters {
   vector[2] bw_bkg;
   vector[2] bw_p;
 
-  row_vector[k] omega_src[2];
-  row_vector[k] omega_bkg[2];
-  row_vector[k] omega_p[2];
+  row_vector[K_src] omega_src[2];
+  row_vector[K_bkg] omega_bkg[2];
+  row_vector[K_p] omega_p[2];
   
-  real scale_src = exp(log_scale_src) * inv_sqrt(K_src);
-  real scale_bkg = exp(log_scale_bkg) * inv_sqrt(K_bkg);
-  real scale_p = exp(log_scale_p) * inv_sqrt(K_onoff);
+  vector[2] scale_src = exp(log_scale_src) * inv_sqrt(K_src);
+  vector[2] scale_bkg = exp(log_scale_bkg) * inv_sqrt(K_bkg);
+  vector[2] scale_p = exp(log_scale_p) * inv_sqrt(K_p);
 
 
   range_src[1] = range1_src_raw * max_range;
@@ -101,7 +104,6 @@ transformed parameters {
 
   omega_p[1] = omega_p_var[1] * bw_p[1];
   omega_p[2] = omega_p_var[2] * bw_p[2];
-
   
 
 }
@@ -112,26 +114,38 @@ model {
 
   beta1_src ~ std_normal();
   beta2_src ~ std_normal();
+
   beta1_bkg ~ std_normal();
   beta2_bkg ~ std_normal();
+
   beta1_p ~ std_normal();
   beta2_p ~ std_normal();
 
-  log_scale_src ~ std_normal();
-  log_scale_bkg ~ std_normal();
-  log_scale_p ~ std_normal();
-
-
+  // log scale
   
-  range1_src_raw ~ normal(0, 1);
-  range2_src_raw ~ normal(0, 1);
+  log_scale_src[2] ~ normal(-2,.5);
+  log_scale_src[1] ~ normal(-1,.5);
 
-  range1_bkg_raw ~ normal(0, 1);
-  range2_bkg_raw ~ normal(0, 1);
+  log_scale_p[2] ~ normal(0,1);
+  log_scale_p[1] ~ normal(0,1);
+  
+  log_scale_bkg ~ std_normal();
 
-  range1_p_raw ~ normal(0, 1);
-  range2_p_raw ~ normal(0, 1);
 
+  // range
+  
+  range1_src_raw ~ normal(0, .25);
+  range2_src_raw ~ normal(0, .25);
+
+  range1_bkg_raw ~ normal(1, .25);
+  range2_bkg_raw ~ normal(1, .25);
+
+  range1_p_raw ~ normal(.5, .5);
+  range2_p_raw ~ normal(.5, .5);
+
+
+  // omega
+  
   omega_src_var[1] ~ std_normal();
   omega_src_var[2] ~ std_normal();
 
@@ -144,20 +158,13 @@ model {
   omega_p_var[2] ~ std_normal();
 
   
-  
-  //log_bw_bkg ~ normal(-2,.5);
-
-  //  log_bw_src ~ normal(0,1);
-  /* log_bw_p ~ normal(-1,1); */
-
-
   target += reduce_sum(partial_log_like, counts, grainsize,
                        time, log_exposure,
-                       omega1_src, omega2_src, beta1_src, beta2_src, bw_src,
+                       omega_src[1], omega_src[2], beta1_src, beta2_src,
                        scale_src, 
-                       omega1_bkg, omega2_bkg, beta1_bkg, beta2_bkg, bw_bkg,
+                       omega_bkg[1], omega_bkg[2], beta1_bkg, beta2_bkg,
                        scale_bkg, 
-                       omega1_p, omega2_p, beta1_p, beta2_p, bw_p,
+                       omega_p[1], omega_p[2], beta1_p, beta2_p, 
                        scale_p
                        );
 
